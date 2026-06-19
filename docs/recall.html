@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Recall — a spaced-repetition deck, in your browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+     DESIGN TOKENS
+     Subject: a personal memory tool. Direction: "index card / lab
+     notebook" — paper warmth, ink, a single signature ledger-red.
+     Display face: Fraunces (optical serif). Body: Newsreader.
+     Mono/utility: Spline Sans Mono. Risk: the review card is a
+     physical-feeling index card that flips in 3D.
+     ============================================================ */
+  :root{
+    --paper:#F3EEE3;        /* warm card stock              */
+    --paper-2:#EAE3D4;      /* slightly deeper panel        */
+    --ink:#23201B;          /* near-black warm ink          */
+    --ink-soft:#5C564B;     /* muted ink                    */
+    --line:#CDC4B0;         /* hairline ruling              */
+    --ledger:#B23A2E;       /* signature ledger red         */
+    --ledger-2:#8E2C22;     /* darker red                   */
+    --teal:#2E6E63;         /* "good" accent                */
+    --gold:#B8862F;         /* "hard" accent                */
+    --shadow:rgba(35,32,27,.16);
+    --radius:3px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Newsreader",Georgia,serif;
+    font-size:17px;
+    line-height:1.55;
+    /* faint ruled-paper texture */
+    background-image:
+      linear-gradient(transparent 27px, rgba(178,58,46,.05) 28px),
+      linear-gradient(90deg, transparent 39px, rgba(46,110,99,.06) 40px, transparent 41px);
+    background-size:100% 28px, 100% 100%;
+  }
+  #root{min-height:100vh;display:flex;flex-direction:column}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 24px;width:100%}
+
+  /* ---------- masthead ---------- */
+  header.masthead{
+    border-bottom:2px solid var(--ink);
+    background:var(--paper);
+    position:sticky;top:0;z-index:30;
+  }
+  .masthead .wrap{display:flex;align-items:center;gap:28px;padding-top:14px;padding-bottom:14px}
+  .brand{display:flex;align-items:baseline;gap:10px;text-decoration:none;color:var(--ink)}
+  .brand .mark{
+    font-family:"Fraunces",serif;font-weight:600;font-size:30px;letter-spacing:-.02em;
+    line-height:1;
+  }
+  .brand .mark em{color:var(--ledger);font-style:italic}
+  .brand .tag{font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);border-left:1px solid var(--line);padding-left:10px}
+  nav.tabs{display:flex;gap:2px;margin-left:auto}
+  nav.tabs a{
+    text-decoration:none;color:var(--ink-soft);
+    font-family:"Spline Sans Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    padding:8px 14px;border:1px solid transparent;border-radius:var(--radius);
+    transition:background .15s,color .15s;
+  }
+  nav.tabs a:hover{color:var(--ink);background:var(--paper-2)}
+  nav.tabs a.active{color:var(--paper);background:var(--ink)}
+
+  main{flex:1;padding:36px 0 80px}
+
+  /* ---------- typography helpers ---------- */
+  h1.page{font-family:"Fraunces",serif;font-weight:600;font-size:clamp(30px,4.5vw,46px);letter-spacing:-.02em;margin:0 0 6px;line-height:1.05}
+  .eyebrow{font-family:"Spline Sans Mono",monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ledger);margin-bottom:10px}
+  .lede{color:var(--ink-soft);max-width:60ch;margin:0 0 28px}
+  .mono{font-family:"Spline Sans Mono",monospace}
+
+  /* ---------- buttons ---------- */
+  button,.btn{font-family:"Spline Sans Mono",monospace;font-size:12px;letter-spacing:.06em;cursor:pointer;border:1px solid var(--ink);background:var(--paper);color:var(--ink);padding:9px 16px;border-radius:var(--radius);transition:transform .08s, background .15s, color .15s}
+  button:hover,.btn:hover{background:var(--ink);color:var(--paper)}
+  button:active{transform:translateY(1px)}
+  button.primary{background:var(--ledger);border-color:var(--ledger);color:#fff}
+  button.primary:hover{background:var(--ledger-2);border-color:var(--ledger-2)}
+  button.ghost{border-color:var(--line);color:var(--ink-soft)}
+  button.ghost:hover{background:var(--paper-2);color:var(--ink)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+
+  /* ---------- cards / panels ---------- */
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:22px;box-shadow:0 1px 0 var(--shadow)}
+  .grid{display:grid;gap:18px}
+  @media(min-width:720px){.grid.cols-2{grid-template-columns:1fr 1fr}.grid.cols-3{grid-template-columns:repeat(3,1fr)}}
+
+  /* deck row */
+  .deck-row{display:flex;align-items:center;gap:18px;padding:16px 0;border-bottom:1px solid var(--line)}
+  .deck-row:last-child{border-bottom:none}
+  .deck-name{font-family:"Fraunces",serif;font-size:22px;font-weight:500;letter-spacing:-.01em}
+  .deck-name a{color:var(--ink);text-decoration:none}
+  .deck-name a:hover{color:var(--ledger)}
+  .deck-meta{margin-left:auto;display:flex;gap:14px;align-items:center}
+  .pill{font-family:"Spline Sans Mono",monospace;font-size:11px;padding:3px 8px;border-radius:20px;border:1px solid var(--line)}
+  .pill.due{color:var(--ledger);border-color:var(--ledger)}
+  .pill.new{color:var(--teal);border-color:var(--teal)}
+
+  /* ---------- the signature: index card ---------- */
+  .study-stage{perspective:1600px;margin:10px 0 26px}
+  .index-card{
+    position:relative;min-height:300px;border-radius:6px;
+    transform-style:preserve-3d;transition:transform .5s cubic-bezier(.2,.7,.2,1);
+    cursor:pointer;
+  }
+  .index-card.flipped{transform:rotateX(180deg)}
+  .index-card .face{
+    position:absolute;inset:0;backface-visibility:hidden;
+    background:linear-gradient(180deg,#FBF7EE,#F3EEE3);
+    border:1px solid var(--line);border-radius:6px;
+    box-shadow:0 18px 40px -22px var(--shadow), inset 0 0 0 1px rgba(255,255,255,.4);
+    padding:54px 40px 32px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    /* red margin line + holes, like a real card */
+    background-image:linear-gradient(90deg,transparent 46px,rgba(178,58,46,.35) 47px,transparent 48px);
+  }
+  .index-card .face.back{transform:rotateX(180deg)}
+  .index-card .face::before{content:"";position:absolute;left:20px;top:20px;width:11px;height:11px;border-radius:50%;background:var(--paper);box-shadow:inset 0 1px 2px var(--shadow)}
+  .card-side-label{position:absolute;top:16px;right:18px;font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft)}
+  .card-text{font-family:"Fraunces",serif;font-size:clamp(22px,3.6vw,32px);font-weight:500;line-height:1.25;max-width:30ch}
+  .card-sub{margin-top:14px;color:var(--ink-soft);font-size:16px;max-width:46ch}
+  .card-extra{margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);max-width:42ch;width:100%;display:flex;flex-direction:column;gap:6px}
+  .card-extra .ex-line{font-size:14px;color:var(--ink-soft);line-height:1.45}
+  .card-extra .ex-label{font-family:"Spline Sans Mono",monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);margin-right:8px;opacity:.85}
+  [dir="rtl"]{text-align:right}
+  [dir="rtl"].ex-line .ex-label{margin-right:0;margin-left:8px}
+  .flip-hint{position:absolute;bottom:14px;left:0;right:0;text-align:center;font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);opacity:.8}
+
+  .answer-bar{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .answer-bar button{min-width:120px;display:flex;flex-direction:column;gap:2px;align-items:center;padding:10px 14px}
+  .answer-bar .ivl{font-size:10px;opacity:.7}
+  button.again{border-color:var(--ledger);color:var(--ledger)}
+  button.again:hover{background:var(--ledger);color:#fff}
+  button.hard{border-color:var(--gold);color:var(--gold)}
+  button.hard:hover{background:var(--gold);color:#fff}
+  button.good{border-color:var(--teal);color:var(--teal)}
+  button.good:hover{background:var(--teal);color:#fff}
+  button.easy{border-color:var(--ink);color:var(--ink)}
+
+  /* progress ticker */
+  .ticker{display:flex;gap:18px;justify-content:center;font-family:"Spline Sans Mono",monospace;font-size:12px;color:var(--ink-soft);margin-bottom:8px}
+  .ticker b{color:var(--ink)}
+  .ticker .t-again{color:var(--ledger)}
+  .ticker .t-good{color:var(--teal)}
+
+  /* ---------- table ---------- */
+  table{width:100%;border-collapse:collapse;font-size:15px}
+  th{text-align:left;font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);padding:10px 12px;border-bottom:2px solid var(--ink);cursor:pointer;user-select:none;white-space:nowrap}
+  th:hover{color:var(--ink)}
+  td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:hover td{background:var(--paper-2)}
+  .row-actions button{padding:5px 9px;font-size:10px}
+  .truncate{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .filter-input,input.txt,textarea.txt,select.txt{font-family:"Newsreader",serif;font-size:15px;width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:var(--radius);background:#FBF7EE;color:var(--ink)}
+  textarea.txt{min-height:96px;resize:vertical;line-height:1.5}
+  label.field{display:block;margin-bottom:14px}
+  label.field .lab{font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:5px;display:block}
+  .err{color:var(--ledger);font-size:12px;font-family:"Spline Sans Mono",monospace;margin-top:4px}
+
+  /* ---------- stats ---------- */
+  .stat{padding:20px}
+  .stat .n{font-family:"Fraunces",serif;font-size:42px;font-weight:600;line-height:1;letter-spacing:-.02em}
+  .stat .l{font-family:"Spline Sans Mono",monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);margin-top:6px}
+  .stat .n.red{color:var(--ledger)} .stat .n.teal{color:var(--teal)} .stat .n.gold{color:var(--gold)}
+  .bars{display:flex;align-items:flex-end;gap:6px;height:160px;padding-top:10px}
+  .bar{flex:1;background:var(--teal);border-radius:2px 2px 0 0;min-height:2px;position:relative;transition:height .4s}
+  .bar:hover{background:var(--ledger)}
+  .bar .cap{position:absolute;top:-18px;left:0;right:0;text-align:center;font-family:"Spline Sans Mono",monospace;font-size:10px;color:var(--ink-soft);opacity:0}
+  .bar:hover .cap{opacity:1}
+  .bar .lab{position:absolute;bottom:-20px;left:0;right:0;text-align:center;font-family:"Spline Sans Mono",monospace;font-size:9px;color:var(--ink-soft)}
+
+  /* ---------- toolbar / misc ---------- */
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+  .toolbar .spacer{flex:1}
+  .empty{text-align:center;padding:60px 20px;color:var(--ink-soft)}
+  .empty .big{font-family:"Fraunces",serif;font-size:26px;color:var(--ink);margin-bottom:8px}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);font-family:"Spline Sans Mono",monospace;font-size:12px;padding:12px 20px;border-radius:var(--radius);z-index:100;box-shadow:0 8px 24px -8px var(--shadow)}
+  .modal-bg{position:fixed;inset:0;background:rgba(35,32,27,.45);z-index:80;display:flex;align-items:center;justify-content:center;padding:20px}
+  .modal{background:var(--paper);border:1px solid var(--ink);border-radius:var(--radius);max-width:560px;width:100%;padding:26px;max-height:90vh;overflow:auto;box-shadow:0 30px 60px -20px var(--shadow)}
+  .modal h2{font-family:"Fraunces",serif;font-weight:600;margin:0 0 4px}
+  .row{display:flex;gap:12px}.row>*{flex:1}
+  .choice-list{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+  .choice{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:var(--radius);padding:14px;cursor:pointer;transition:border-color .15s,background .15s}
+  .choice:hover{background:var(--paper-2)}
+  .choice.sel{border-color:var(--ledger);background:#FBF7EE}
+  .choice.disabled{opacity:.5;cursor:not-allowed}
+  .choice input[type="radio"]{margin-top:3px;accent-color:var(--ledger)}
+  .choice-title{font-family:"Fraunces",serif;font-size:17px;font-weight:500}
+  .choice-sub{font-size:13px;color:var(--ink-soft);margin-top:2px}
+  .loading{display:flex;align-items:center;justify-content:center;min-height:70vh;font-family:"Spline Sans Mono",monospace;color:var(--ink-soft);letter-spacing:.1em;text-transform:uppercase;font-size:12px}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ledger);margin-left:8px;animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+  .hidden{display:none}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/": "https://esm.sh/react@18.3.1/",
+    "react-dom": "https://esm.sh/react-dom@18.3.1?external=react",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?external=react",
+    "@tanstack/react-query": "https://esm.sh/@tanstack/react-query@5.51.1?external=react,react-dom",
+    "@tanstack/react-table": "https://esm.sh/@tanstack/react-table@8.19.2?external=react",
+    "@tanstack/react-form": "https://esm.sh/@tanstack/react-form@0.26.0?external=react",
+    "@tanstack/react-router": "https://esm.sh/@tanstack/react-router@1.45.6?external=react,react-dom",
+    "sql.js": "https://esm.sh/sql.js@1.10.2",
+    "jszip": "https://esm.sh/jszip@3.10.1"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module">
+import React, { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } from "react";
+import { createRoot } from "react-dom/client";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel, flexRender } from "@tanstack/react-table";
+import { useForm } from "@tanstack/react-form";
+import { createRootRoute, createRoute, createRouter, createHashHistory, RouterProvider, Outlet, Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import initSqlJs from "sql.js";
+import JSZip from "jszip";
+
+/* =========================================================================
+   1. SQLITE LAYER — sql.js, a full SQLite engine compiled to WASM, running
+   entirely in the browser. We seed a DB, persist its bytes to localStorage,
+   can export it to a .sqlite file, and can import an Anki .apkg.
+   ========================================================================= */
+const DB = {
+  SQL: null,
+  db: null,
+  async init() {
+    this.SQL = await initSqlJs({
+      locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${f}`
+    });
+    const saved = localStorage.getItem("recall.db");
+    if (saved) {
+      try {
+        this.db = new this.SQL.Database(b64ToBytes(saved));
+        this._schema();
+        return;
+      } catch (e) {
+        console.warn("reload failed, reseeding", e);
+      }
+    }
+    this.db = new this.SQL.Database();
+    this._schema();
+    this._seed();
+    this.persist();
+  },
+  _schema() {
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS decks(
+        id INTEGER PRIMARY KEY, name TEXT NOT NULL, created INTEGER);
+      CREATE TABLE IF NOT EXISTS cards(
+        id INTEGER PRIMARY KEY, deck_id INTEGER, front TEXT, back TEXT, extra TEXT,
+        ease REAL DEFAULT 2.5, interval INTEGER DEFAULT 0, reps INTEGER DEFAULT 0,
+        lapses INTEGER DEFAULT 0, due INTEGER, created INTEGER);
+      CREATE TABLE IF NOT EXISTS reviews(
+        id INTEGER PRIMARY KEY, card_id INTEGER, ts INTEGER, rating INTEGER, interval INTEGER);
+    `);
+    // migrate older saved DBs that predate the `extra` column
+    const cols = this.all("PRAGMA table_info(cards)").map(c => c.name);
+    if (!cols.includes("extra")) this.db.run("ALTER TABLE cards ADD COLUMN extra TEXT");
+  },
+  _seed() {
+    const now = Date.now();
+    [["Spanish · A1 vocabulary"], ["World capitals"], ["Biology · the cell"]].forEach(([n], i) => this.db.run("INSERT INTO decks(id,name,created) VALUES(?,?,?)", [i + 1, n, now]));
+    const cards = [[1, "la casa", "the house"], [1, "el perro", "the dog"], [1, "comer", "to eat"], [1, "el agua", "the water"], [1, "gracias", "thank you"], [1, "mañana", "tomorrow / morning"], [1, "la biblioteca", "the library"], [1, "feliz", "happy"], [2, "Capital of Japan", "Tokyo"], [2, "Capital of Australia", "Canberra"], [2, "Capital of Canada", "Ottawa"], [2, "Capital of Brazil", "Brasília"], [2, "Capital of Egypt", "Cairo"], [2, "Capital of Norway", "Oslo"], [3, "Powerhouse of the cell", "Mitochondrion"], [3, "Site of protein synthesis", "Ribosome"], [3, "Controls what enters / leaves the cell", "Cell membrane"], [3, "Stores genetic material", "Nucleus"]];
+    let id = 1;
+    cards.forEach(([d, f, b], i) => {
+      const due = i % 3 === 0 ? now - 86400000 : i % 3 === 1 ? now : now + 2 * 86400000;
+      const reps = i % 3 === 0 ? 2 : 0;
+      this.db.run("INSERT INTO cards(id,deck_id,front,back,ease,interval,reps,lapses,due,created) VALUES(?,?,?,?,?,?,?,?,?,?)", [id++, d, f, b, 2.5, reps ? 3 : 0, reps, 0, due, now]);
+    });
+    for (let day = 13; day >= 0; day--) {
+      const n = Math.floor(Math.random() * 9) + (day < 3 ? 6 : 1);
+      for (let k = 0; k < n; k++) {
+        const ts = now - day * 86400000 - Math.floor(Math.random() * 8e6);
+        this.db.run("INSERT INTO reviews(card_id,ts,rating,interval) VALUES(?,?,?,?)", [1 + Math.floor(Math.random() * 18), ts, 1 + Math.floor(Math.random() * 4), 1]);
+      }
+    }
+  },
+  all(sql, params = []) {
+    const r = this.db.exec(sql, params);
+    if (!r.length) return [];
+    const {
+      columns,
+      values
+    } = r[0];
+    return values.map(row => Object.fromEntries(row.map((v, i) => [columns[i], v])));
+  },
+  one(sql, params = []) {
+    return this.all(sql, params)[0] || null;
+  },
+  run(sql, params = []) {
+    this.db.run(sql, params);
+    this.persist();
+  },
+  persist() {
+    localStorage.setItem("recall.db", bytesToB64(this.db.export()));
+  }
+};
+function bytesToB64(bytes) {
+  let bin = "";
+  const c = 0x8000;
+  for (let i = 0; i < bytes.length; i += c) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + c));
+  return btoa(bin);
+}
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/* =========================================================================
+   2. SRS — SM-2 scheduling (the algorithm Anki is built on)
+   ratings: 1 Again · 2 Hard · 3 Good · 4 Easy
+   ========================================================================= */
+const DAY = 86400000;
+function schedule(card, rating) {
+  let {
+    ease = 2.5,
+    interval = 0,
+    reps = 0,
+    lapses = 0
+  } = card;
+  if (rating === 1) {
+    reps = 0;
+    lapses += 1;
+    ease = Math.max(1.3, ease - 0.2);
+    interval = 0;
+    return {
+      ease,
+      interval,
+      reps,
+      lapses,
+      due: Date.now() + 60 * 1000
+    };
+  }
+  if (reps === 0) interval = rating === 4 ? 3 : 1;else if (reps === 1) interval = rating === 2 ? 3 : rating === 3 ? 4 : 6;else {
+    const mult = rating === 2 ? 1.2 : rating === 3 ? ease : ease * 1.3;
+    interval = Math.max(1, Math.round(interval * mult));
+  }
+  if (rating === 2) ease = Math.max(1.3, ease - 0.15);
+  if (rating === 4) ease = ease + 0.15;
+  reps += 1;
+  return {
+    ease: +ease.toFixed(2),
+    interval,
+    reps,
+    lapses,
+    due: Date.now() + interval * DAY
+  };
+}
+function previewIvl(card, rating) {
+  const s = schedule({
+    ...card
+  }, rating);
+  if (rating === 1) return "<1m";
+  if (s.interval < 1) return "today";
+  if (s.interval === 1) return "1d";
+  if (s.interval < 30) return s.interval + "d";
+  if (s.interval < 365) return Math.round(s.interval / 30) + "mo";
+  return (s.interval / 365).toFixed(1) + "y";
+}
+
+// detect Persian / Arabic script so we can render those lines right-to-left
+const RTL_RE = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+const dirOf = s => RTL_RE.test(String(s || "")) ? "rtl" : "ltr";
+
+/* =========================================================================
+   3. DATA ACCESS (consumed by TanStack Query)
+   ========================================================================= */
+const api = {
+  decks() {
+    return DB.all(`SELECT d.id, d.name,
+      (SELECT COUNT(*) FROM cards c WHERE c.deck_id=d.id) AS total,
+      (SELECT COUNT(*) FROM cards c WHERE c.deck_id=d.id AND c.reps=0) AS fresh,
+      (SELECT COUNT(*) FROM cards c WHERE c.deck_id=d.id AND c.due<=${Date.now()}) AS due
+      FROM decks d ORDER BY d.name`);
+  },
+  deck(id) {
+    return DB.one("SELECT * FROM decks WHERE id=?", [id]);
+  },
+  cards(deckId) {
+    return DB.all("SELECT * FROM cards WHERE deck_id=? ORDER BY id", [deckId]);
+  },
+  dueCards(deckId) {
+    return DB.all("SELECT * FROM cards WHERE deck_id=? AND due<=? ORDER BY due", [deckId, Date.now()]);
+  },
+  addDeck(name) {
+    const m = DB.one("SELECT MAX(id) m FROM decks");
+    const id = (m?.m || 0) + 1;
+    DB.run("INSERT INTO decks(id,name,created) VALUES(?,?,?)", [id, name, Date.now()]);
+    return id;
+  },
+  renameDeck(id, name) {
+    DB.run("UPDATE decks SET name=? WHERE id=?", [name, id]);
+  },
+  deleteDeck(id) {
+    DB.run("DELETE FROM cards WHERE deck_id=?", [id]);
+    DB.run("DELETE FROM decks WHERE id=?", [id]);
+  },
+  addCard(c) {
+    const m = DB.one("SELECT MAX(id) m FROM cards");
+    const id = (m?.m || 0) + 1;
+    DB.run("INSERT INTO cards(id,deck_id,front,back,extra,ease,interval,reps,lapses,due,created) VALUES(?,?,?,?,?,2.5,0,0,0,?,?)", [id, c.deck_id, c.front, c.back, c.extra || null, Date.now(), Date.now()]);
+    return id;
+  },
+  updateCard(id, c) {
+    DB.run("UPDATE cards SET front=?,back=?,extra=? WHERE id=?", [c.front, c.back, c.extra ?? null, id]);
+  },
+  deleteCard(id) {
+    DB.run("DELETE FROM cards WHERE id=?", [id]);
+  },
+  answer(card, rating) {
+    const s = schedule(card, rating);
+    DB.run("UPDATE cards SET ease=?,interval=?,reps=?,lapses=?,due=? WHERE id=?", [s.ease, s.interval, s.reps, s.lapses, s.due, card.id]);
+    DB.run("INSERT INTO reviews(card_id,ts,rating,interval) VALUES(?,?,?,?)", [card.id, Date.now(), rating, s.interval]);
+  },
+  stats() {
+    const totals = DB.one(`SELECT
+      (SELECT COUNT(*) FROM cards) total,
+      (SELECT COUNT(*) FROM cards WHERE due<=${Date.now()}) due,
+      (SELECT COUNT(*) FROM cards WHERE reps=0) fresh,
+      (SELECT COUNT(*) FROM cards WHERE reps>0) learned,
+      (SELECT COUNT(*) FROM reviews) reviews`);
+    const start = Date.now() - 13 * DAY;
+    const rows = DB.all("SELECT ts,rating FROM reviews WHERE ts>=?", [start]);
+    const days = Array.from({
+      length: 14
+    }, (_, i) => ({
+      d: new Date(start + i * DAY),
+      count: 0,
+      again: 0
+    }));
+    rows.forEach(r => {
+      const idx = Math.floor((r.ts - start) / DAY);
+      if (days[idx]) {
+        days[idx].count++;
+        if (r.rating === 1) days[idx].again++;
+      }
+    });
+    const matured = DB.one("SELECT COUNT(*) c FROM cards WHERE interval>=21")?.c || 0;
+    return {
+      totals,
+      days,
+      matured
+    };
+  }
+};
+
+/* =========================================================================
+   4. TANSTACK QUERY
+   ========================================================================= */
+const qc = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 0,
+      refetchOnWindowFocus: false
+    }
+  }
+});
+const useDecks = () => useQuery({
+  queryKey: ["decks"],
+  queryFn: () => api.decks()
+});
+const useDeck = id => useQuery({
+  queryKey: ["deck", id],
+  queryFn: () => api.deck(id),
+  enabled: id != null
+});
+const useCards = id => useQuery({
+  queryKey: ["cards", id],
+  queryFn: () => api.cards(id),
+  enabled: id != null
+});
+const useStats = () => useQuery({
+  queryKey: ["stats"],
+  queryFn: () => api.stats()
+});
+const invalidateAll = () => qc.invalidateQueries();
+
+/* =========================================================================
+   5. SHELL / NAV
+   ========================================================================= */
+const ToastCtx = /*#__PURE__*/createContext(() => {});
+const useToast = () => useContext(ToastCtx);
+function Shell() {
+  const [toast, setToast] = useState(null);
+  const show = useCallback(m => {
+    setToast(m);
+    clearTimeout(window.__t);
+    window.__t = setTimeout(() => setToast(null), 2200);
+  }, []);
+  const loc = useRouterState({
+    select: s => s.location.pathname
+  });
+  const Tab = ({
+    to,
+    children
+  }) => {
+    const active = to === "/" ? loc === "/" : loc.startsWith(to);
+    return /*#__PURE__*/React.createElement(Link, {
+      to: to,
+      className: active ? "active" : ""
+    }, children);
+  };
+  return /*#__PURE__*/React.createElement(ToastCtx.Provider, {
+    value: show
+  }, /*#__PURE__*/React.createElement("header", {
+    className: "masthead"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "wrap"
+  }, /*#__PURE__*/React.createElement(Link, {
+    to: "/",
+    className: "brand"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mark"
+  }, "Re", /*#__PURE__*/React.createElement("em", null, "\xB7"), "call"), /*#__PURE__*/React.createElement("span", {
+    className: "tag"
+  }, "SQLite \xB7 in\xA0browser")), /*#__PURE__*/React.createElement("nav", {
+    className: "tabs"
+  }, /*#__PURE__*/React.createElement(Tab, {
+    to: "/"
+  }, "Decks"), /*#__PURE__*/React.createElement(Tab, {
+    to: "/stats"
+  }, "Stats"), /*#__PURE__*/React.createElement(Tab, {
+    to: "/import"
+  }, "Import")))), /*#__PURE__*/React.createElement("main", null, /*#__PURE__*/React.createElement("div", {
+    className: "wrap"
+  }, /*#__PURE__*/React.createElement(Outlet, null))), toast && /*#__PURE__*/React.createElement("div", {
+    className: "toast"
+  }, toast));
+}
+
+/* =========================================================================
+   6. DECKS PAGE
+   ========================================================================= */
+function DecksPage() {
+  const {
+    data: decks = [],
+    isLoading
+  } = useDecks();
+  const toast = useToast();
+  const [modal, setModal] = useState(null);
+  const nav = useNavigate();
+  const save = () => {
+    const name = (modal.name || "").trim();
+    if (!name) return;
+    if (modal.mode === "new") {
+      api.addDeck(name);
+      toast("Deck created");
+    } else {
+      api.renameDeck(modal.id, name);
+      toast("Renamed");
+    }
+    setModal(null);
+    invalidateAll();
+  };
+  const del = (id, name) => {
+    if (confirm(`Delete “${name}” and all its cards?`)) {
+      api.deleteDeck(id);
+      toast("Deck deleted");
+      invalidateAll();
+    }
+  };
+  if (isLoading) return /*#__PURE__*/React.createElement(Loading, null);
+  const totalDue = decks.reduce((a, d) => a + d.due, 0);
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "eyebrow"
+  }, "Your collection"), /*#__PURE__*/React.createElement("h1", {
+    className: "page"
+  }, "Decks"), /*#__PURE__*/React.createElement("p", {
+    className: "lede"
+  }, totalDue > 0 ? /*#__PURE__*/React.createElement(React.Fragment, null, "You have ", /*#__PURE__*/React.createElement("b", {
+    style: {
+      color: "var(--ledger)"
+    }
+  }, totalDue, " card", totalDue > 1 ? "s" : "", " due"), " across ", decks.length, " deck", decks.length > 1 ? "s" : "", ". Pick one and start a session.") : /*#__PURE__*/React.createElement(React.Fragment, null, "Nothing due right now \u2014 you\u2019re caught up. Browse a deck or add new cards.")), /*#__PURE__*/React.createElement("div", {
+    className: "toolbar"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "primary",
+    onClick: () => setModal({
+      mode: "new",
+      name: ""
+    })
+  }, "+ New deck"), /*#__PURE__*/React.createElement("div", {
+    className: "spacer"
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "ghost",
+    onClick: () => nav({
+      to: "/import"
+    })
+  }, "Import .apkg / .sqlite")), /*#__PURE__*/React.createElement("div", {
+    className: "panel"
+  }, decks.length === 0 && /*#__PURE__*/React.createElement("div", {
+    className: "empty"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "big"
+  }, "No decks yet"), "Create one to get started."), decks.map(d => /*#__PURE__*/React.createElement("div", {
+    className: "deck-row",
+    key: d.id
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "deck-name"
+  }, /*#__PURE__*/React.createElement(Link, {
+    to: "/deck/$deckId",
+    params: {
+      deckId: String(d.id)
+    }
+  }, d.name)), /*#__PURE__*/React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 12,
+      color: "var(--ink-soft)",
+      marginTop: 2
+    }
+  }, d.total, " card", d.total !== 1 ? "s" : "")), /*#__PURE__*/React.createElement("div", {
+    className: "deck-meta"
+  }, d.due > 0 && /*#__PURE__*/React.createElement("span", {
+    className: "pill due"
+  }, d.due, " due"), d.fresh > 0 && /*#__PURE__*/React.createElement("span", {
+    className: "pill new"
+  }, d.fresh, " new"), /*#__PURE__*/React.createElement("button", {
+    className: "primary",
+    disabled: d.due === 0 && d.fresh === 0,
+    onClick: () => nav({
+      to: "/study/$deckId",
+      params: {
+        deckId: String(d.id)
+      }
+    })
+  }, "Study"), /*#__PURE__*/React.createElement("button", {
+    className: "ghost",
+    onClick: () => setModal({
+      mode: "rename",
+      id: d.id,
+      name: d.name
+    })
+  }, "Rename"), /*#__PURE__*/React.createElement("button", {
+    className: "ghost",
+    onClick: () => del(d.id, d.name)
+  }, "Delete"))))), modal && /*#__PURE__*/React.createElement("div", {
+    className: "modal-bg",
+    onClick: e => {
+      if (e.target === e.currentTarget) setModal(null);
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal"
+  }, /*#__PURE__*/React.createElement("h2", null, modal.mode === "new" ? "New deck" : "Rename deck"), /*#__PURE__*/React.createElement("label", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "lab"
+  }, "Deck name"), /*#__PURE__*/React.createElement("input", {
+    className: "txt",
+    autoFocus: true,
+    value: modal.name,
+    onChange: e => setModal({
+      ...modal,
+      name: e.target.value
+    }),
+    onKeyDown: e => e.key === "Enter" && save(),
+    placeholder: "e.g. French verbs"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "row",
+    style: {
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "ghost",
+    onClick: () => setModal(null)
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    className: "primary",
+    onClick: save
+  }, modal.mode === "new" ? "Create" : "Save")))));
+}
+
+/* =========================================================================
+   7. STUDY PAGE — the signature index-card review
+   ========================================================================= */
+function StudyPage() {
+  const {
+    deckId
+  } = studyRoute.useParams();
+  const id = +deckId;
+  const {
+    data: deck
+  } = useDeck(id);
+  const nav = useNavigate();
+  const [queue, setQueue] = useState(null);
+  const [pos, setPos] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+  const [tally, setTally] = useState({
+    again: 0,
+    good: 0,
+    done: 0
+  });
+  useEffect(() => {
+    setQueue(api.dueCards(id));
+    setPos(0);
+    setFlipped(false);
+    setTally({
+      again: 0,
+      good: 0,
+      done: 0
+    });
+  }, [id]);
+  const card = queue && queue[pos];
+  const answer = useCallback(rating => {
+    if (!card) return;
+    api.answer(card, rating);
+    setTally(t => ({
+      again: t.again + (rating === 1 ? 1 : 0),
+      good: t.good + (rating >= 3 ? 1 : 0),
+      done: t.done + 1
+    }));
+    if (rating === 1) {
+      setQueue(q => {
+        const nx = [...q];
+        const [c] = nx.splice(pos, 1);
+        nx.push({
+          ...c
+        });
+        return nx;
+      });
+    } else {
+      setPos(p => p + 1);
+    }
+    setFlipped(false);
+    invalidateAll();
+  }, [card, pos]);
+  useEffect(() => {
+    const h = e => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (e.code === "Space") {
+        e.preventDefault();
+        setFlipped(f => !f);
+      } else if (flipped && ["1", "2", "3", "4"].includes(e.key)) answer(+e.key);
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [flipped, answer]);
+  if (queue === null) return /*#__PURE__*/React.createElement(Loading, null);
+  const remaining = queue.length - pos;
+  if (!card) {
+    return /*#__PURE__*/React.createElement("div", {
+      className: "empty",
+      style: {
+        paddingTop: 40
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "big"
+    }, "Session complete \u2713"), /*#__PURE__*/React.createElement("p", {
+      className: "lede",
+      style: {
+        margin: "6px auto 22px"
+      }
+    }, "You reviewed ", /*#__PURE__*/React.createElement("b", null, tally.done), " card", tally.done !== 1 ? "s" : "", " in ", /*#__PURE__*/React.createElement("b", null, deck?.name), ".", tally.again > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, " ", tally.again, " marked ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--ledger)"
+      }
+    }, "Again"), " \u2014 they\u2019ll come back sooner.")), /*#__PURE__*/React.createElement("div", {
+      className: "row",
+      style: {
+        maxWidth: 360,
+        margin: "0 auto"
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "ghost",
+      onClick: () => nav({
+        to: "/deck/$deckId",
+        params: {
+          deckId
+        }
+      })
+    }, "Browse deck"), /*#__PURE__*/React.createElement("button", {
+      className: "primary",
+      onClick: () => nav({
+        to: "/"
+      })
+    }, "Back to decks")));
+  }
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "toolbar"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "ghost",
+    onClick: () => nav({
+      to: "/"
+    })
+  }, "\u2190 Decks"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "Fraunces,serif",
+      fontSize: 20
+    }
+  }, deck?.name)), /*#__PURE__*/React.createElement("div", {
+    className: "ticker"
+  }, /*#__PURE__*/React.createElement("span", null, "remaining ", /*#__PURE__*/React.createElement("b", null, remaining)), /*#__PURE__*/React.createElement("span", {
+    className: "t-good"
+  }, "good ", /*#__PURE__*/React.createElement("b", null, tally.good)), /*#__PURE__*/React.createElement("span", {
+    className: "t-again"
+  }, "again ", /*#__PURE__*/React.createElement("b", null, tally.again))), /*#__PURE__*/React.createElement("div", {
+    className: "study-stage"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "index-card" + (flipped ? " flipped" : ""),
+    onClick: () => setFlipped(f => !f),
+    role: "button",
+    "aria-label": "flip card",
+    tabIndex: 0,
+    onKeyDown: e => e.key === "Enter" && setFlipped(f => !f)
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "face front"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "card-side-label"
+  }, "prompt"), /*#__PURE__*/React.createElement("div", {
+    className: "card-text",
+    dir: dirOf(card.front)
+  }, card.front), /*#__PURE__*/React.createElement("div", {
+    className: "flip-hint"
+  }, "tap or press space to flip")), /*#__PURE__*/React.createElement("div", {
+    className: "face back"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "card-side-label"
+  }, "answer"), /*#__PURE__*/React.createElement("div", {
+    className: "card-text",
+    dir: dirOf(card.back)
+  }, card.back), card.front && /*#__PURE__*/React.createElement("div", {
+    className: "card-sub",
+    dir: dirOf(card.front)
+  }, card.front), card.extra && /*#__PURE__*/React.createElement("div", {
+    className: "card-extra"
+  }, card.extra.split("\n").map((line, i) => {
+    const idx = line.indexOf(":");
+    const label = idx > -1 ? line.slice(0, idx) : "";
+    const val = idx > -1 ? line.slice(idx + 1).trim() : line;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "ex-line",
+      key: i,
+      dir: dirOf(val)
+    }, label && /*#__PURE__*/React.createElement("span", {
+      className: "ex-label"
+    }, label), val);
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "flip-hint"
+  }, "rate how well you knew it")))), !flipped ? /*#__PURE__*/React.createElement("div", {
+    className: "answer-bar"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "primary",
+    onClick: () => setFlipped(true)
+  }, "Show answer\xA0\xB7\xA0", /*#__PURE__*/React.createElement("span", {
+    className: "mono"
+  }, "space"))) : /*#__PURE__*/React.createElement("div", {
+    className: "answer-bar"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "again",
+    onClick: () => answer(1)
+  }, "Again", /*#__PURE__*/React.createElement("span", {
+    className: "ivl"
+  }, previewIvl(card, 1), " \xB7 1")), /*#__PURE__*/React.createElement("button", {
+    className: "hard",
+    onClick: () => answer(2)
+  }, "Hard", /*#__PURE__*/React.createElement("span", {
+    className: "ivl"
+  }, previewIvl(card, 2), " \xB7 2")), /*#__PURE__*/React.createElement("button", {
+    className: "good",
+    onClick: () => answer(3)
+  }, "Good", /*#__PURE__*/React.createElement("span", {
+    className: "ivl"
+  }, previewIvl(card, 3), " \xB7 3")), /*#__PURE__*/React.createElement("button", {
+    className: "easy",
+    onClick: () => answer(4)
+  }, "Easy", /*#__PURE__*/React.createElement("span", {
+    className: "ivl"
+  }, previewIvl(card, 4), " \xB7 4"))));
+}
+
+/* =========================================================================
+   8. BROWSE PAGE — TanStack Table + TanStack Form
+   ========================================================================= */
+function BrowsePage() {
+  const {
+    deckId
+  } = browseRoute.useParams();
+  const id = +deckId;
+  const {
+    data: deck
+  } = useDeck(id);
+  const {
+    data: cards = [],
+    isLoading
+  } = useCards(id);
+  const toast = useToast();
+  const nav = useNavigate();
+  const [sorting, setSorting] = useState([]);
+  const [filter, setFilter] = useState("");
+  const [editing, setEditing] = useState(null);
+  const fmtDue = (ms, reps) => {
+    if (reps === 0) return "new";
+    const diff = ms - Date.now();
+    if (diff <= 0) return "due now";
+    const d = Math.round(diff / DAY);
+    return d === 0 ? "today" : d === 1 ? "in 1d" : `in ${d}d`;
+  };
+  const columns = useMemo(() => [{
+    accessorKey: "front",
+    header: "Front",
+    cell: i => /*#__PURE__*/React.createElement("div", {
+      className: "truncate",
+      dir: dirOf(i.getValue()),
+      title: i.getValue()
+    }, i.getValue())
+  }, {
+    accessorKey: "back",
+    header: "Back",
+    cell: i => /*#__PURE__*/React.createElement("div", {
+      className: "truncate",
+      dir: dirOf(i.getValue()),
+      title: i.getValue()
+    }, i.getValue())
+  }, {
+    accessorKey: "reps",
+    header: "Reps"
+  }, {
+    accessorKey: "interval",
+    header: "Interval",
+    cell: i => i.getValue() ? i.getValue() + "d" : "—"
+  }, {
+    accessorKey: "ease",
+    header: "Ease",
+    cell: i => i.getValue().toFixed(2)
+  }, {
+    accessorKey: "due",
+    header: "Due",
+    cell: i => /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: i.row.original.reps > 0 && i.getValue() <= Date.now() ? "var(--ledger)" : "inherit"
+      }
+    }, fmtDue(i.getValue(), i.row.original.reps))
+  }, {
+    id: "actions",
+    header: "",
+    cell: i => /*#__PURE__*/React.createElement("div", {
+      className: "row-actions",
+      style: {
+        display: "flex",
+        gap: 6
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "ghost",
+      onClick: () => setEditing(i.row.original)
+    }, "Edit"), /*#__PURE__*/React.createElement("button", {
+      className: "ghost",
+      onClick: () => {
+        if (confirm("Delete this card?")) {
+          api.deleteCard(i.row.original.id);
+          toast("Card deleted");
+          invalidateAll();
+        }
+      }
+    }, "Del"))
+  }], []);
+  const table = useReactTable({
+    data: cards,
+    columns,
+    state: {
+      sorting,
+      globalFilter: filter
+    },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setFilter,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel()
+  });
+  if (isLoading) return /*#__PURE__*/React.createElement(Loading, null);
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "toolbar"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "ghost",
+    onClick: () => nav({
+      to: "/"
+    })
+  }, "\u2190 Decks")), /*#__PURE__*/React.createElement("div", {
+    className: "eyebrow"
+  }, "Browse & edit"), /*#__PURE__*/React.createElement("h1", {
+    className: "page"
+  }, deck?.name), /*#__PURE__*/React.createElement("p", {
+    className: "lede"
+  }, cards.length, " card", cards.length !== 1 ? "s" : "", ". Click a column to sort, search to filter, or edit any card."), /*#__PURE__*/React.createElement("div", {
+    className: "toolbar"
+  }, /*#__PURE__*/React.createElement("input", {
+    className: "filter-input",
+    style: {
+      maxWidth: 320
+    },
+    placeholder: "Search front or back\u2026",
+    value: filter,
+    onChange: e => setFilter(e.target.value)
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "spacer"
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "primary",
+    onClick: () => setEditing({
+      new: true,
+      deck_id: id
+    })
+  }, "+ Add card"), /*#__PURE__*/React.createElement("button", {
+    className: "ghost",
+    disabled: !cards.length,
+    onClick: () => nav({
+      to: "/study/$deckId",
+      params: {
+        deckId
+      }
+    })
+  }, "Study deck")), /*#__PURE__*/React.createElement("div", {
+    className: "panel",
+    style: {
+      padding: "6px 6px 0",
+      overflowX: "auto"
+    }
+  }, cards.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "empty"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "big"
+  }, "Empty deck"), "Add your first card to start studying.") : /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, table.getHeaderGroups().map(hg => /*#__PURE__*/React.createElement("tr", {
+    key: hg.id
+  }, hg.headers.map(h => /*#__PURE__*/React.createElement("th", {
+    key: h.id,
+    onClick: h.column.getToggleSortingHandler()
+  }, flexRender(h.column.columnDef.header, h.getContext()), {
+    asc: " ↑",
+    desc: " ↓"
+  }[h.column.getIsSorted()] || ""))))), /*#__PURE__*/React.createElement("tbody", null, table.getRowModel().rows.map(r => /*#__PURE__*/React.createElement("tr", {
+    key: r.id
+  }, r.getVisibleCells().map(c => /*#__PURE__*/React.createElement("td", {
+    key: c.id
+  }, flexRender(c.column.columnDef.cell, c.getContext())))))))), editing && /*#__PURE__*/React.createElement(CardForm, {
+    card: editing,
+    onClose: () => setEditing(null),
+    onSaved: () => {
+      setEditing(null);
+      invalidateAll();
+    }
+  }));
+}
+function CardForm({
+  card,
+  onClose,
+  onSaved
+}) {
+  const toast = useToast();
+  const isNew = !!card.new;
+  const form = useForm({
+    defaultValues: {
+      front: card.front || "",
+      back: card.back || "",
+      extra: card.extra || ""
+    },
+    onSubmit: async ({
+      value
+    }) => {
+      if (isNew) {
+        api.addCard({
+          deck_id: card.deck_id,
+          front: value.front.trim(),
+          back: value.back.trim(),
+          extra: value.extra.trim()
+        });
+        toast("Card added");
+      } else {
+        api.updateCard(card.id, {
+          front: value.front.trim(),
+          back: value.back.trim(),
+          extra: value.extra.trim()
+        });
+        toast("Card saved");
+      }
+      onSaved();
+    }
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    className: "modal-bg",
+    onClick: e => {
+      if (e.target === e.currentTarget) onClose();
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal"
+  }, /*#__PURE__*/React.createElement("h2", null, isNew ? "Add card" : "Edit card"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "var(--ink-soft)",
+      marginTop: 0,
+      fontSize: 14
+    }
+  }, "Front is the prompt; back is the answer you grade yourself against."), /*#__PURE__*/React.createElement("form", {
+    onSubmit: e => {
+      e.preventDefault();
+      form.handleSubmit();
+    }
+  }, /*#__PURE__*/React.createElement(form.Field, {
+    name: "front",
+    validators: {
+      onChange: ({
+        value
+      }) => !value.trim() ? "Front can’t be empty" : undefined
+    }
+  }, f => /*#__PURE__*/React.createElement("label", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "lab"
+  }, "Front \xB7 prompt"), /*#__PURE__*/React.createElement("textarea", {
+    className: "txt",
+    value: f.state.value,
+    autoFocus: true,
+    onChange: e => f.handleChange(e.target.value),
+    onBlur: f.handleBlur,
+    placeholder: "la casa"
+  }), f.state.meta.errors[0] && /*#__PURE__*/React.createElement("div", {
+    className: "err"
+  }, f.state.meta.errors[0]))), /*#__PURE__*/React.createElement(form.Field, {
+    name: "back",
+    validators: {
+      onChange: ({
+        value
+      }) => !value.trim() ? "Back can’t be empty" : undefined
+    }
+  }, f => /*#__PURE__*/React.createElement("label", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "lab"
+  }, "Back \xB7 answer"), /*#__PURE__*/React.createElement("textarea", {
+    className: "txt",
+    value: f.state.value,
+    onChange: e => f.handleChange(e.target.value),
+    onBlur: f.handleBlur,
+    placeholder: "the house"
+  }), f.state.meta.errors[0] && /*#__PURE__*/React.createElement("div", {
+    className: "err"
+  }, f.state.meta.errors[0]))), /*#__PURE__*/React.createElement(form.Field, {
+    name: "extra"
+  }, f => /*#__PURE__*/React.createElement("label", {
+    className: "field"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "lab"
+  }, "Notes \xB7 examples (optional)"), /*#__PURE__*/React.createElement("textarea", {
+    className: "txt",
+    value: f.state.value,
+    dir: dirOf(f.state.value),
+    onChange: e => f.handleChange(e.target.value),
+    onBlur: f.handleBlur,
+    placeholder: "Example sentences, word type, etc. \u2014 one per line"
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "row",
+    style: {
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "ghost",
+    onClick: onClose
+  }, "Cancel"), /*#__PURE__*/React.createElement(form.Subscribe, {
+    selector: s => [s.canSubmit]
+  }, ([canSubmit]) => /*#__PURE__*/React.createElement("button", {
+    type: "submit",
+    className: "primary",
+    disabled: !canSubmit
+  }, isNew ? "Add card" : "Save changes"))))));
+}
+
+/* =========================================================================
+   9. STATS PAGE
+   ========================================================================= */
+function StatsPage() {
+  const {
+    data,
+    isLoading
+  } = useStats();
+  if (isLoading || !data) return /*#__PURE__*/React.createElement(Loading, null);
+  const {
+    totals,
+    days,
+    matured
+  } = data;
+  const max = Math.max(1, ...days.map(d => d.count));
+  const dow = ["S", "M", "T", "W", "T", "F", "S"];
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "eyebrow"
+  }, "Your progress"), /*#__PURE__*/React.createElement("h1", {
+    className: "page"
+  }, "Statistics"), /*#__PURE__*/React.createElement("p", {
+    className: "lede"
+  }, "A read on your collection and the last two weeks of reviews \u2014 all computed live with SQL against the in-browser database."), /*#__PURE__*/React.createElement("div", {
+    className: "grid cols-3",
+    style: {
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "panel stat"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "n"
+  }, totals.total), /*#__PURE__*/React.createElement("div", {
+    className: "l"
+  }, "Total cards")), /*#__PURE__*/React.createElement("div", {
+    className: "panel stat"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "n red"
+  }, totals.due), /*#__PURE__*/React.createElement("div", {
+    className: "l"
+  }, "Due now")), /*#__PURE__*/React.createElement("div", {
+    className: "panel stat"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "n teal"
+  }, totals.learned), /*#__PURE__*/React.createElement("div", {
+    className: "l"
+  }, "In learning"))), /*#__PURE__*/React.createElement("div", {
+    className: "grid cols-3",
+    style: {
+      marginBottom: 26
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "panel stat"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "n gold"
+  }, totals.fresh), /*#__PURE__*/React.createElement("div", {
+    className: "l"
+  }, "New / untouched")), /*#__PURE__*/React.createElement("div", {
+    className: "panel stat"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "n"
+  }, matured), /*#__PURE__*/React.createElement("div", {
+    className: "l"
+  }, "Mature (\u226521d)")), /*#__PURE__*/React.createElement("div", {
+    className: "panel stat"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "n"
+  }, totals.reviews), /*#__PURE__*/React.createElement("div", {
+    className: "l"
+  }, "Reviews logged"))), /*#__PURE__*/React.createElement("div", {
+    className: "panel"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "Fraunces,serif",
+      fontSize: 22,
+      marginBottom: 4
+    }
+  }, "Reviews \xB7 last 14 days"), /*#__PURE__*/React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 12,
+      color: "var(--ink-soft)",
+      marginBottom: 20
+    }
+  }, "hover a bar for the count \xB7 red portion = \u201CAgain\u201D"), /*#__PURE__*/React.createElement("div", {
+    className: "bars"
+  }, days.map((d, i) => {
+    const h = d.count / max * 100;
+    const againH = d.count ? d.again / d.count * h : 0;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "bar",
+      key: i,
+      style: {
+        height: Math.max(2, h) + "%"
+      },
+      title: `${d.count} reviews`
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "cap"
+    }, d.count), d.again > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: againH + "%",
+        background: "var(--ledger)",
+        borderRadius: "0 0 2px 2px"
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "lab"
+    }, dow[d.d.getDay()]));
+  }))));
+}
+
+/* =========================================================================
+   10. IMPORT PAGE — .apkg = zip containing a SQLite "collection.anki2"
+   ========================================================================= */
+function ImportPage() {
+  const toast = useToast();
+  const nav = useNavigate();
+  const {
+    data: existingDecks = []
+  } = useDecks();
+  const [busy, setBusy] = useState(false);
+  const [log, setLog] = useState([]);
+  const [pending, setPending] = useState(null); // { fileName, groups:[{leaf, cards, planLabel}] }
+  const add = m => setLog(l => [...l, m]);
+
+  // Step 1 — read the package and build ready-to-insert cards, but DON'T write yet.
+  async function parseApkg(file) {
+    setBusy(true);
+    setLog([]);
+    setPending(null);
+    add("Reading " + file.name + " …");
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const dbName = zip.file("collection.anki21") ? "collection.anki21" : zip.file("collection.anki2") ? "collection.anki2" : null;
+      if (!dbName) throw new Error("No collection.anki2 found inside the package.");
+      add("Found " + dbName + ", opening SQLite…");
+      const bytes = await zip.file(dbName).async("uint8array");
+      const adb = new DB.SQL.Database(bytes);
+
+      // col row holds two JSON blobs: decks (id->{name}) and models (note types -> field defs)
+      const col = adb.exec("SELECT decks, models FROM col LIMIT 1");
+      let deckMap = {},
+        models = {};
+      try {
+        deckMap = JSON.parse(col[0].values[0][0]);
+      } catch (_) {}
+      try {
+        models = JSON.parse(col[0].values[0][1]);
+      } catch (_) {}
+
+      // For each note type, decide which field is the prompt and which is the answer.
+      // Front defaults to field 0; back is the first field whose NAME hints at a
+      // translation/meaning, else field 1. The rest are kept as "extra".
+      const HINTS = ["persian", "farsi", "meaning", "translation", "answer", "back", "definition", "english", "target", "معنی", "فارسی"];
+      const fieldPlan = {};
+      Object.entries(models).forEach(([mid, m]) => {
+        const names = (m.flds || []).map(f => f.name);
+        const lower = names.map(n => n.toLowerCase());
+        let back = null;
+        for (let i = 1; i < lower.length; i++) {
+          if (HINTS.some(h => lower[i].includes(h))) {
+            back = i;
+            break;
+          }
+        }
+        if (back === null) back = names.length > 1 ? 1 : 0;
+        fieldPlan[mid] = {
+          front: 0,
+          back,
+          names
+        };
+      });
+      const notesRes = adb.exec("SELECT id, mid, flds FROM notes");
+      const cardsRes = adb.exec("SELECT nid, did FROM cards");
+      if (!notesRes.length) throw new Error("No notes in package.");
+      const noteRows = {};
+      notesRes[0].values.forEach(([nid, mid, flds]) => {
+        noteRows[nid] = {
+          mid: String(mid),
+          parts: String(flds).split("\x1f")
+        };
+      });
+
+      // group note-ids by their deck
+      const byDeck = {};
+      (cardsRes[0]?.values || []).forEach(([nid, did]) => {
+        (byDeck[did] = byDeck[did] || []).push(nid);
+      });
+      const strip = s => String(s ?? "").replace(/<br\s*\/?>/gi, " ").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
+      const groups = [];
+      for (const did of Object.keys(byDeck)) {
+        const rawName = deckMap[did]?.name || "Imported deck " + did;
+        const leaf = rawName.split("::").pop().trim();
+        const nids = byDeck[did];
+        if (/^default$/i.test(rawName) && nids.length === 0) continue;
+        const cards = [];
+        nids.forEach(nid => {
+          const note = noteRows[nid];
+          if (!note) return;
+          const plan = fieldPlan[note.mid] || {
+            front: 0,
+            back: 1,
+            names: []
+          };
+          const front = strip(note.parts[plan.front]);
+          const back = strip(note.parts[plan.back]);
+          if (!front) return;
+          const extra = note.parts.map((p, i) => ({
+            label: plan.names[i] || "Field " + (i + 1),
+            val: strip(p),
+            i
+          })).filter(x => x.i !== plan.front && x.i !== plan.back && x.val).map(x => `${x.label}: ${x.val}`).join("\n");
+          cards.push({
+            front,
+            back,
+            extra
+          });
+        });
+        if (cards.length === 0) continue;
+        const plan0 = fieldPlan[noteRows[nids[0]]?.mid];
+        const planLabel = plan0 ? `${plan0.names[plan0.front]} → ${plan0.names[plan0.back]}` : "field 1 → field 2";
+        groups.push({
+          leaf,
+          cards,
+          planLabel
+        });
+      }
+      adb.close();
+      if (groups.length === 0) throw new Error("No usable cards found in the package.");
+      const totalCards = groups.reduce((a, g) => a + g.cards.length, 0);
+      add(`Parsed ${totalCards} card(s) across ${groups.length} deck(s). Choose where to put them →`);
+      setPending({
+        fileName: file.name,
+        groups,
+        totalCards
+      });
+    } catch (e) {
+      add("✗ " + e.message);
+      console.error(e);
+    }
+    setBusy(false);
+  }
+
+  // Step 2 — commit the parsed cards to the chosen destination.
+  // target: { mode:"new" } creates a deck per group using its own name,
+  //         { mode:"existing", deckId } appends every parsed card into one existing deck.
+  function commitImport(target) {
+    if (!pending) return;
+    setBusy(true);
+    try {
+      let importedCards = 0,
+        touchedDecks = 0;
+      if (target.mode === "existing") {
+        const deckId = target.deckId;
+        const deckName = existingDecks.find(d => d.id === deckId)?.name || "deck";
+        pending.groups.forEach(g => g.cards.forEach(c => {
+          api.addCard({
+            deck_id: deckId,
+            ...c
+          });
+          importedCards++;
+        }));
+        touchedDecks = 1;
+        add(`✓ Added ${importedCards} card(s) to existing deck “${deckName}”.`);
+        toast("Cards added to deck");
+      } else {
+        pending.groups.forEach(g => {
+          const newDeckId = api.addDeck(g.leaf);
+          touchedDecks++;
+          g.cards.forEach(c => {
+            api.addCard({
+              deck_id: newDeckId,
+              ...c
+            });
+            importedCards++;
+          });
+          add(`  · new deck “${g.leaf}” — ${g.cards.length} card(s) · ${g.planLabel}`);
+        });
+        add(`✓ Imported ${importedCards} card(s) into ${touchedDecks} new deck(s).`);
+        toast("Import complete");
+      }
+      invalidateAll();
+      setPending(null);
+    } catch (e) {
+      add("✗ " + e.message);
+      console.error(e);
+    }
+    setBusy(false);
+  }
+  async function handleSqlite(file) {
+    setBusy(true);
+    add("Loading SQLite database " + file.name + " …");
+    try {
+      DB.db = new DB.SQL.Database(new Uint8Array(await file.arrayBuffer()));
+      DB._schema();
+      DB.persist();
+      invalidateAll();
+      add("✓ Database loaded and is now active.");
+      toast("Database replaced");
+    } catch (e) {
+      add("✗ " + e.message);
+    }
+    setBusy(false);
+  }
+  function exportDb() {
+    const blob = new Blob([DB.db.export()], {
+      type: "application/x-sqlite3"
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "recall.sqlite";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("Exported recall.sqlite");
+  }
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "eyebrow"
+  }, "Bring your own data"), /*#__PURE__*/React.createElement("h1", {
+    className: "page"
+  }, "Import & export"), /*#__PURE__*/React.createElement("p", {
+    className: "lede"
+  }, "Everything here is a real SQLite database living in your browser. Drop in an Anki ", /*#__PURE__*/React.createElement("span", {
+    className: "mono"
+  }, ".apkg"), " to pull its cards in, load a ", /*#__PURE__*/React.createElement("span", {
+    className: "mono"
+  }, ".sqlite"), " file to replace the whole collection, or export what you have."), /*#__PURE__*/React.createElement("div", {
+    className: "grid cols-2"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "panel"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "Fraunces,serif",
+      fontSize: 22,
+      marginBottom: 6
+    }
+  }, "Import Anki .apkg"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "var(--ink-soft)",
+      fontSize: 14,
+      marginTop: 0
+    }
+  }, "An .apkg is a zip wrapping an SQLite collection. We read its cards, then you choose whether to create new decks or add the cards into a deck you already have."), /*#__PURE__*/React.createElement("label", {
+    className: "btn primary",
+    style: {
+      display: "inline-block"
+    }
+  }, "Choose .apkg file", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: ".apkg,.zip",
+    className: "hidden",
+    disabled: busy,
+    onChange: e => e.target.files[0] && parseApkg(e.target.files[0])
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "panel"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "Fraunces,serif",
+      fontSize: 22,
+      marginBottom: 6
+    }
+  }, "Load / export .sqlite"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "var(--ink-soft)",
+      fontSize: 14,
+      marginTop: 0
+    }
+  }, "Load a Recall database to replace your current one, or export your collection to back it up or move it."), /*#__PURE__*/React.createElement("div", {
+    className: "row",
+    style: {
+      maxWidth: 380
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "btn ghost",
+    style: {
+      display: "inline-block",
+      textAlign: "center"
+    }
+  }, "Load .sqlite", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: ".sqlite,.db,.sqlite3",
+    className: "hidden",
+    disabled: busy,
+    onChange: e => e.target.files[0] && handleSqlite(e.target.files[0])
+  })), /*#__PURE__*/React.createElement("button", {
+    className: "primary",
+    onClick: exportDb
+  }, "Export .sqlite")))), (busy || log.length > 0) && /*#__PURE__*/React.createElement("div", {
+    className: "panel",
+    style: {
+      marginTop: 18
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mono",
+    style: {
+      fontSize: 12,
+      color: "var(--ink-soft)",
+      marginBottom: 8
+    }
+  }, "IMPORT LOG ", busy && /*#__PURE__*/React.createElement("span", {
+    className: "dot"
+  })), log.map((l, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    className: "mono",
+    style: {
+      fontSize: 13,
+      padding: "2px 0",
+      color: l[0] === "✗" ? "var(--ledger)" : l[0] === "✓" ? "var(--teal)" : "var(--ink)"
+    }
+  }, l))), /*#__PURE__*/React.createElement("div", {
+    className: "toolbar",
+    style: {
+      marginTop: 22
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "ghost",
+    onClick: () => {
+      if (confirm("Wipe everything and restore the sample decks?")) {
+        localStorage.removeItem("recall.db");
+        location.reload();
+      }
+    }
+  }, "Reset to sample data"), /*#__PURE__*/React.createElement("div", {
+    className: "spacer"
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "primary",
+    onClick: () => nav({
+      to: "/"
+    })
+  }, "Done \u2192 Decks")), pending && /*#__PURE__*/React.createElement(ImportTargetModal, {
+    pending: pending,
+    decks: existingDecks,
+    busy: busy,
+    onCancel: () => {
+      setPending(null);
+      add("Import cancelled.");
+    },
+    onCommit: commitImport
+  }));
+}
+
+// Modal that lets the user send freshly-parsed cards to a new deck or an existing one.
+function ImportTargetModal({
+  pending,
+  decks,
+  busy,
+  onCancel,
+  onCommit
+}) {
+  const single = pending.groups.length === 1;
+  const [mode, setMode] = useState("new"); // "new" | "existing"
+  const [deckId, setDeckId] = useState(decks[0]?.id ?? null);
+  const canAppend = decks.length > 0;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "modal-bg",
+    onClick: e => {
+      if (e.target === e.currentTarget) onCancel();
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal"
+  }, /*#__PURE__*/React.createElement("h2", null, "Where should these cards go?"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "var(--ink-soft)",
+      marginTop: 0,
+      fontSize: 14
+    }
+  }, /*#__PURE__*/React.createElement("b", null, pending.fileName), " \u2014 ", pending.totalCards, " card", pending.totalCards !== 1 ? "s" : "", single ? /*#__PURE__*/React.createElement(React.Fragment, null, " from \u201C", pending.groups[0].leaf, "\u201D.") : /*#__PURE__*/React.createElement(React.Fragment, null, " across ", pending.groups.length, " decks.")), /*#__PURE__*/React.createElement("div", {
+    className: "choice-list"
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "choice" + (mode === "new" ? " sel" : "")
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "radio",
+    name: "dest",
+    checked: mode === "new",
+    onChange: () => setMode("new")
+  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "choice-title"
+  }, "Create new deck", single ? "" : "s"), /*#__PURE__*/React.createElement("div", {
+    className: "choice-sub"
+  }, single ? /*#__PURE__*/React.createElement(React.Fragment, null, "Makes a new deck called \u201C", pending.groups[0].leaf, "\u201D.") : /*#__PURE__*/React.createElement(React.Fragment, null, "Makes ", pending.groups.length, " new decks, one per source deck.")))), /*#__PURE__*/React.createElement("label", {
+    className: "choice" + (mode === "existing" ? " sel" : "") + (canAppend ? "" : " disabled")
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "radio",
+    name: "dest",
+    checked: mode === "existing",
+    disabled: !canAppend,
+    onChange: () => setMode("existing")
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "choice-title"
+  }, "Add to an existing deck"), /*#__PURE__*/React.createElement("div", {
+    className: "choice-sub"
+  }, canAppend ? /*#__PURE__*/React.createElement(React.Fragment, null, "All ", pending.totalCards, " card", pending.totalCards !== 1 ? "s" : "", " go into one deck you already have.") : /*#__PURE__*/React.createElement(React.Fragment, null, "You don\u2019t have any decks yet \u2014 create one first.")), mode === "existing" && canAppend && /*#__PURE__*/React.createElement("select", {
+    className: "txt",
+    style: {
+      marginTop: 10
+    },
+    value: deckId ?? "",
+    onChange: e => setDeckId(Number(e.target.value))
+  }, decks.map(d => /*#__PURE__*/React.createElement("option", {
+    key: d.id,
+    value: d.id
+  }, d.name, " \xB7 ", d.total, " card", d.total !== 1 ? "s" : "")))))), /*#__PURE__*/React.createElement("div", {
+    className: "row",
+    style: {
+      marginTop: 18
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "ghost",
+    onClick: onCancel,
+    disabled: busy
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    className: "primary",
+    disabled: busy || mode === "existing" && deckId == null,
+    onClick: () => onCommit(mode === "existing" ? {
+      mode: "existing",
+      deckId
+    } : {
+      mode: "new"
+    })
+  }, mode === "existing" ? `Add ${pending.totalCards} card${pending.totalCards !== 1 ? "s" : ""}` : `Create deck${single ? "" : "s"}`))));
+}
+
+/* =========================================================================
+   11. SHARED + ROUTER + BOOT
+   ========================================================================= */
+function Loading() {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "loading"
+  }, "Reading the database", /*#__PURE__*/React.createElement("span", {
+    className: "dot"
+  }));
+}
+const rootRoute = createRootRoute({
+  component: Shell
+});
+const decksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/",
+  component: DecksPage
+});
+const browseRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/deck/$deckId",
+  component: BrowsePage
+});
+const studyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/study/$deckId",
+  component: StudyPage
+});
+const statsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/stats",
+  component: StatsPage
+});
+const importRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/import",
+  component: ImportPage
+});
+const routeTree = rootRoute.addChildren([decksRoute, browseRoute, studyRoute, statsRoute, importRoute]);
+const router = createRouter({
+  routeTree,
+  history: createHashHistory()
+});
+function App() {
+  return /*#__PURE__*/React.createElement(QueryClientProvider, {
+    client: qc
+  }, /*#__PURE__*/React.createElement(RouterProvider, {
+    router: router
+  }));
+}
+(async () => {
+  const root = createRoot(document.getElementById("root"));
+  root.render(/*#__PURE__*/React.createElement("div", {
+    className: "loading"
+  }, "Booting SQLite (WASM)", /*#__PURE__*/React.createElement("span", {
+    className: "dot"
+  })));
+  await DB.init();
+  root.render(/*#__PURE__*/React.createElement(App, null));
+})();
+  </script>
+</body>
+</html>

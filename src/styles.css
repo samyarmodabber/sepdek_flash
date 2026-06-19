@@ -1,0 +1,439 @@
+
+@import "tailwindcss";
+
+/* ============================================================
+   DESIGN TOKENS — "index card / lab notebook" aesthetic.
+   Paper warmth, ink, a single signature ledger-red.
+   Display: Fraunces · Body: Newsreader · Mono/utility: Spline Sans Mono.
+   ============================================================ */
+@theme {
+  --font-sans: "Newsreader", Georgia, serif;
+  --font-mono: "Spline Sans Mono", monospace;
+  --font-display: "Fraunces", serif;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+}
+
+:root {
+  /* recall palette, exposed under their own names for component CSS */
+  --paper: #f3eee3;
+  --paper-2: #eae3d4;
+  --ink: #23201b;
+  --ink-soft: #5c564b;
+  --line: #cdc4b0;
+  --ledger: #b23a2e;
+  --ledger-2: #8e2c22;
+  --teal: #2e6e63;
+  --gold: #b8862f;
+  --shadow: rgba(35, 32, 27, 0.16);
+  --radius: 3px;
+
+  /* app's existing variable names, remapped to the paper palette so every
+     utility class (bg-[var(--panel)], text-[var(--muted)], …) re-skins at once */
+  --bg: #f3eee3;
+  --panel: #fbf7ee;
+  --panel-2: #eae3d4;
+  --border: #cdc4b0;
+  --text: #23201b;
+  --muted: #5c564b;
+  --accent: #b23a2e;
+  --green: #2e6e63;
+  --amber: #b8862f;
+  --red: #b23a2e;
+  --blue: #3a6b8e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Newsreader", Georgia, serif;
+  font-size: 17px;
+  line-height: 1.55;
+  /* faint ruled-paper texture */
+  background-image:
+    linear-gradient(transparent 27px, rgba(178, 58, 46, 0.05) 28px),
+    linear-gradient(90deg, transparent 39px, rgba(46, 110, 99, 0.06) 40px, transparent 41px);
+  background-size: 100% 28px, 100% 100%;
+}
+
+h1,
+h2 {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* ---------- masthead ---------- */
+header.masthead {
+  border-bottom: 2px solid var(--ink);
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+.masthead-wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 14px 24px;
+}
+@media (max-width: 640px) {
+  /* two rows on phones: brand + account on top, full-width nav below.
+     keeps everything tappable instead of cramming one overflowing line */
+  .masthead-wrap {
+    flex-wrap: wrap;
+    gap: 10px 12px;
+    padding: 10px 14px;
+  }
+  /* the "spaced repetition" tagline crowds the brand on phones */
+  .brand .tag {
+    display: none;
+  }
+  .brand .mark {
+    font-size: 24px;
+  }
+  .masthead-wrap .account {
+    margin-left: auto;
+  }
+  nav.tabs {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+    justify-content: center;
+    gap: 4px;
+  }
+  nav.tabs a {
+    flex: 1;
+    text-align: center;
+    padding: 8px 6px;
+    letter-spacing: 0.04em;
+  }
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.brand .mark {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.brand .mark em {
+  color: var(--ledger);
+  font-style: italic;
+}
+.brand .tag {
+  font-family: "Spline Sans Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  border-left: 1px solid var(--line);
+  padding-left: 10px;
+}
+nav.tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+nav.tabs a {
+  text-decoration: none;
+  color: var(--ink-soft);
+  font-family: "Spline Sans Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  transition: background 0.15s, color 0.15s;
+}
+nav.tabs a:hover {
+  color: var(--ink);
+  background: var(--paper-2);
+}
+nav.tabs a.active {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+/* ---------- pills ---------- */
+.pill {
+  font-family: "Spline Sans Mono", monospace;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+}
+
+/* ---------- the signature: index card ---------- */
+.study-stage {
+  perspective: 1600px;
+  margin: 10px 0 26px;
+}
+.index-card {
+  position: relative;
+  min-height: clamp(260px, 48vh, 340px);
+  border-radius: 6px;
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+  cursor: pointer;
+}
+.index-card.flipped {
+  transform: rotateX(180deg);
+}
+.index-card .face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  background: linear-gradient(180deg, #fbf7ee, #f3eee3);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow:
+    0 18px 40px -22px var(--shadow),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+  padding: 48px clamp(20px, 6vw, 40px) clamp(28px, 6vw, 40px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  overflow: auto;
+  /* red margin line, like a real card */
+  background-image: linear-gradient(
+    90deg,
+    transparent 46px,
+    rgba(178, 58, 46, 0.35) 47px,
+    transparent 48px
+  );
+}
+.index-card .face.back {
+  transform: rotateX(180deg);
+}
+.index-card .face::before {
+  content: "";
+  position: absolute;
+  left: 20px;
+  top: 20px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: inset 0 1px 2px var(--shadow);
+}
+.card-side-label {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  font-family: "Spline Sans Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.flip-hint {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: "Spline Sans Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  opacity: 0.8;
+}
+
+/* progress ticker */
+.ticker {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  font-family: "Spline Sans Mono", monospace;
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+.ticker b {
+  color: var(--ink);
+}
+.ticker .t-again {
+  color: var(--ledger);
+}
+.ticker .t-good {
+  color: var(--teal);
+}
+
+/* answer bar */
+.answer-bar {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.answer-bar button {
+  font-family: "Spline Sans Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  padding: 10px 14px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: var(--radius);
+  transition: transform 0.08s, background 0.15s, color 0.15s;
+}
+.answer-bar button:active {
+  transform: translateY(1px);
+}
+@media (max-width: 480px) {
+  /* let the four rating buttons fill a clean 2-column grid instead of
+     wrapping unevenly */
+  .answer-bar button {
+    flex: 1 1 calc(50% - 5px);
+    min-width: 0;
+  }
+}
+.answer-bar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.answer-bar .ivl {
+  font-size: 10px;
+  opacity: 0.7;
+}
+.answer-bar button.again {
+  border-color: var(--ledger);
+  color: var(--ledger);
+}
+.answer-bar button.again:hover {
+  background: var(--ledger);
+  color: #fff;
+}
+.answer-bar button.hard {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.answer-bar button.hard:hover {
+  background: var(--gold);
+  color: #fff;
+}
+.answer-bar button.good {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+.answer-bar button.good:hover {
+  background: var(--teal);
+  color: #fff;
+}
+.answer-bar button.easy {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.answer-bar button.easy:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* Pin the deck's trailing category/topic line (e.g. "Arbeit & Wirtschaft | …")
+   to the top-left of the answer side, in a small muted font, instead of letting
+   it sit centered at the bottom. Heuristic: it's the last block in the answer
+   content. Higher specificity + !important so it wins over the deck's own CSS.
+   Offset to the right of the decorative punch-hole at the card's top-left. */
+.index-card .face.back .card-content > *:last-child {
+  position: absolute !important;
+  top: 14px;
+  left: 44px;
+  right: auto;
+  bottom: auto;
+  margin: 0 !important;
+  max-width: calc(100% - 120px);
+  font-size: 11px !important;
+  font-family: "Spline Sans Mono", monospace !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.04em;
+  text-align: left !important;
+  color: var(--ink-soft) !important;
+}
+
+/* Rendered Anki card content */
+.card-content {
+  /* stronger viewport term so the text actually scales with phone width
+     instead of pinning to the floor on small screens */
+  font-size: clamp(19px, 5vw, 30px);
+  font-family: "Fraunces", serif;
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: center;
+  word-break: break-word;
+  color: var(--ink);
+}
+.card-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 0.5rem auto;
+}
+.card-content hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 1.25rem 0;
+}
+.card-content .cloze {
+  color: var(--ledger);
+  font-weight: 700;
+}
+.card-content a.hint {
+  color: var(--teal);
+  cursor: pointer;
+}
+.card-content table {
+  margin: 0 auto;
+  border-collapse: collapse;
+}
+.card-content td,
+.card-content th {
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+}
+
+/* Heatmap */
+.heat-cell {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--panel-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

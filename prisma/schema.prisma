@@ -1,0 +1,182 @@
+// Alaki schema — MongoDB via Prisma. Switching DB later = change `provider`
+// (plus the @db.ObjectId / id defaults, which are Mongo-specific).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------- auth (better-auth) -----------------------------
+model User {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  bio           String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions  Session[]
+  accounts  Account[]
+  decks     Deck[]
+  noteTypes NoteType[]
+  notes     Note[]
+  cards     Card[]
+  reviews   Review[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  accountId             String
+  providerId            String
+  userId                String    @db.ObjectId
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// ------------------------------- domain ---------------------------------------
+model Deck {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  // Hierarchy is tracked by this scalar only (no Prisma self-relation, so deleting
+  // a parent deck doesn't trip referential-integrity checks). Descendants are
+  // resolved in code from parentId.
+  parentId  String?  @db.ObjectId
+  createdAt DateTime @default(now())
+  newPerDay Int      @default(20)
+  revPerDay Int      @default(200)
+  // Scheduling mode: "anki" | "exponential" | "leitner". schedulerConfig holds
+  // the mode-specific settings (multipliers for exponential, box intervals for
+  // leitner); null = use that mode's built-in defaults. Anki ignores it.
+  // Optional so existing decks (Mongo: no migration) read back fine; code
+  // treats a missing value as "anki".
+  scheduler       String? @default("anki")
+  schedulerConfig Json?
+
+  cards Card[]
+
+  @@index([userId])
+  @@map("deck")
+}
+
+model NoteType {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  isCloze   Boolean  @default(false)
+  fields    String[]
+  templates Json // {name,qfmt,afmt}[]
+  css       String   @default("")
+
+  notes Note[]
+
+  @@index([userId])
+  @@map("note_type")
+}
+
+model Note {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String   @db.ObjectId
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noteTypeId String   @db.ObjectId
+  noteType   NoteType @relation(fields: [noteTypeId], references: [id], onDelete: Cascade)
+  fields     String[]
+  tags       String   @default("")
+  createdAt  DateTime @default(now())
+
+  cards Card[]
+
+  @@index([userId])
+  @@map("note")
+}
+
+model Card {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String    @db.ObjectId
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noteId       String    @db.ObjectId
+  note         Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  deckId       String    @db.ObjectId
+  deck         Deck      @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  templateOrd  Int       @default(0)
+  frontHtml    String    @default("")
+  backHtml     String    @default("")
+  state        String    @default("new") // new | learning | review | relearning
+  due          DateTime
+  interval     Float     @default(0) // days
+  easeFactor   Float     @default(2.5)
+  reps         Int       @default(0)
+  lapses       Int       @default(0)
+  learningStep Int       @default(0)
+  box          Int?      @default(0) // Leitner box index (unused by other modes; optional for Mongo back-compat)
+  lastReviewed DateTime?
+  suspended    Boolean   @default(false)
+
+  reviews Review[]
+
+  @@index([userId, deckId])
+  @@index([deckId, state, due])
+  @@map("card")
+}
+
+model Review {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String   @db.ObjectId
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardId     String   @db.ObjectId
+  card       Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  reviewedAt DateTime
+  rating     Int // 1..4
+  prevState  String?
+  interval   Float?
+  easeFactor Float?
+  timeMs     Int      @default(0)
+
+  @@index([userId, reviewedAt])
+  @@map("review")
+}
