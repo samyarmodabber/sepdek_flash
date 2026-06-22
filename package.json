@@ -7,11 +7,12 @@
   },
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:server": "tsx watch server/index.ts",
+    "dev:server": "tsx watch server/serve.ts",
     "dev:web": "vite dev --port 3000",
     "generate-routes": "tsr generate",
     "build": "vite build",
-    "start": "tsx server/index.ts",
+    "postinstall": "prisma generate",
+    "start": "tsx server/serve.ts",
     "preview": "vite preview",
     "test": "vitest run"
   },

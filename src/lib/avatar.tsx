@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 function initials(nameOrEmail: string): string {
   const s = nameOrEmail.trim()
   if (!s) return '?'
@@ -25,13 +27,22 @@ export function Avatar({
   email: string
   size?: number
 }) {
-  if (image) {
+  // Fall back to initials if the image fails to load — otherwise a broken
+  // <img> would render its `alt` text (the user's name) in place of the avatar.
+  const [failed, setFailed] = useState(false)
+  useEffect(() => setFailed(false), [image])
+
+  if (image && !failed) {
     return (
       <img
         src={image}
         alt={name || email}
         width={size}
         height={size}
+        // Google's googleusercontent.com images are commonly blocked unless the
+        // request omits the referrer.
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
         className="rounded-full object-cover"
         style={{ width: size, height: size }}
       />

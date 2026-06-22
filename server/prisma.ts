@@ -27,8 +27,13 @@ export const prisma =
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
-// Media files extracted from .apkg imports are stored on disk, namespaced per user.
-export const DATA_DIR = join(process.cwd(), 'data')
+// Media files extracted from .apkg imports are stored on disk, namespaced per
+// user. Vercel's project filesystem is read-only, so on Vercel we fall back to
+// the writable /tmp dir. WARNING: /tmp is ephemeral and per-instance — uploaded
+// media will NOT persist across invocations, so the /media/* routes are not
+// durable on serverless. Real media hosting needs external object storage
+// (e.g. Vercel Blob or S3).
+export const DATA_DIR = process.env.VERCEL ? '/tmp/data' : join(process.cwd(), 'data')
 export const MEDIA_DIR = join(DATA_DIR, 'media')
 mkdirSync(MEDIA_DIR, { recursive: true })
 

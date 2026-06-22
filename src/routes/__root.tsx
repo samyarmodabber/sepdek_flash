@@ -63,7 +63,8 @@ function RootComponent() {
           <div className="account flex items-center gap-3 border-l border-[var(--line)] pl-4">
             <Link
               to="/profile"
-              className="flex items-center gap-2 text-[var(--muted)] transition hover:text-[var(--text)]"
+              className="flex items-center transition hover:opacity-80"
+              title={session.user.name || session.user.email}
             >
               <Avatar
                 image={session.user.image ?? null}
@@ -71,9 +72,6 @@ function RootComponent() {
                 email={session.user.email}
                 size={28}
               />
-              <span className="hidden max-w-[160px] truncate text-xs sm:block">
-                {session.user.name || session.user.email}
-              </span>
             </Link>
             <button
               type="button"

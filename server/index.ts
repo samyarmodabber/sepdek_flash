@@ -1,8 +1,6 @@
 import 'dotenv/config'
 import express, { type NextFunction, type Request, type Response } from 'express'
 import multer from 'multer'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import { toNodeHandler, fromNodeHeaders } from 'better-auth/node'
 import { Prisma } from '@prisma/client'
 import { prisma, MEDIA_DIR } from './prisma.js'
@@ -20,7 +18,7 @@ import {
 } from './srs.js'
 import { renderNote, type NoteType } from './anki/render.js'
 
-const app = express()
+export const app = express()
 
 // better-auth handler MUST come before express.json() (it reads the raw body).
 app.all(/^\/api\/auth\/.*/, toNodeHandler(auth))
@@ -739,12 +737,6 @@ app.get(
   }),
 )
 
-// ---------- production: serve built frontend ----------
-const distDir = join(process.cwd(), 'dist')
-if (existsSync(distDir)) {
-  app.use(express.static(distDir))
-  app.get(/^(?!\/api|\/media).*/, (_req, res) => res.sendFile(join(distDir, 'index.html')))
-}
-
-const PORT = Number(process.env.PORT ?? 3001)
-app.listen(PORT, () => console.log(`API listening on http://localhost:${PORT}`))
+// This module only builds and exports the Express `app`. It listens on no port:
+//  - on Vercel it is invoked as a serverless function via api/index.ts
+//  - locally / on a single Node host it is booted by server/serve.ts
